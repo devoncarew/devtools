@@ -96,20 +96,27 @@ th.right {
 }
 
 span.label {
-    background-color: #616161;
+    background-color: #818181;
 }
 
-span.label.stderr {
+span.label.kind-stderr {
     background-color: #F44336;
 }
-span.label.stdout {
+
+span.label.kind-stdout {
     background-color: #78909C;
 }
-span.label.flutter {
+
+span.label.kind-flutter {
     background-color: #0091ea;
 }
-span.label.gc {
+
+span.label.kind-gc {
     background-color: #424242;
+}
+
+span.label.kind-http {
+    background-color: #39a551;
 }
 
 .table-virtual {
@@ -482,7 +489,6 @@ div.tabnav {
     cursor: default;
 }
 
-
 td.log-label-column {
     text-align: right;
     max-width: 148px;
@@ -490,6 +496,14 @@ td.log-label-column {
 
 .secondary-area {
     height: 126px;
+}
+
+.log-header-item {
+    cursor: default;
+}
+
+.log-header-item + .log-header-item {
+  margin-left: 8px;
 }
 
 .log-details {

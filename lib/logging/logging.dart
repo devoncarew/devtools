@@ -16,9 +16,15 @@ import '../ui/elements.dart';
 import '../ui/primer.dart';
 import '../utils.dart';
 
-// TODO(devoncarew): filtering, and enabling additional logging
-
 // TODO(devoncarew): don't update DOM when we're not active; update once we return
+
+// TODO(devoncarew): hide GC, flutter frames
+
+// TODO(devoncarew): show for logging channels
+
+// TODO(devoncarew): show for new logging channels (handle events)
+
+// ext.flutter.logs.loggingChannels, ext.flutter.logs.enable (enabled)
 
 // For performance reasons, we drop old logs in batches, so the log will grow
 // to kMaxLogItemsUpperBound then truncate to kMaxLogItemsLowerBound.
@@ -44,6 +50,11 @@ class LoggingScreen extends Screen {
   StatusItem logCountStatus;
   SetStateMixin loggingStateMixin = new SetStateMixin();
 
+  bool _showGc = false;
+  bool _showFlutterFrames = true;
+  CoreElement _loggingButtonContainer;
+  final List<LoggingButton> _logButtons = <LoggingButton>[];
+
   @override
   void createContent(Framework framework, CoreElement mainDiv) {
     this.framework = framework;
@@ -57,6 +68,7 @@ class LoggingScreen extends Screen {
             ..layoutHorizontal()
             ..clazz('align-items-center')
             ..add(<CoreElement>[
+              _loggingButtonContainer = span()..add(_createFixedFilters()),
               span()..flex(),
               new PButton('Clear logs')
                 ..small()
@@ -74,6 +86,10 @@ class LoggingScreen extends Screen {
     loggingTable.onSelect.listen((LogData selection) {
       logDetailsUI.setData(selection);
     });
+
+    _handleIsolateChanged(serviceInfo.isolateManager.selectedIsolate);
+    serviceInfo.isolateManager.onSelectedIsolateChanged
+        .listen(_handleIsolateChanged);
   }
 
   CoreElement _createTableView() {
@@ -132,6 +148,10 @@ class LoggingScreen extends Screen {
 
     // Log GC events.
     service.onGCEvent.listen((Event e) {
+      if (!_showGc) {
+        return;
+      }
+
       final HeapSpace newSpace = HeapSpace.parse(e.json['new']);
       final HeapSpace oldSpace = HeapSpace.parse(e.json['old']);
       final Map<dynamic, dynamic> isolateRef = e.json['isolate'];
@@ -235,6 +255,14 @@ class LoggingScreen extends Screen {
 
     // Log Flutter frame events.
     service.onExtensionEvent.listen((Event e) {
+      final String kind = e.extensionKind.toLowerCase();
+
+      if (!_showFlutterFrames &&
+          (kind.startsWith('flutter.frame') ||
+              kind.startsWith('flutter.firstframe'))) {
+        return;
+      }
+
       if (e.extensionKind == 'Flutter.Frame') {
         final FrameInfo frame = FrameInfo.from(e.extensionData.data);
 
@@ -244,14 +272,14 @@ class LoggingScreen extends Screen {
         final String div = createFrameDivHtml(frame);
 
         _log(new LogData(
-          '${e.extensionKind.toLowerCase()}',
+          '$kind',
           jsonEncode(e.extensionData.data),
           e.timestamp,
           summaryHtml: '$frameInfo$div',
         ));
       } else {
         _log(new LogData(
-          '${e.extensionKind.toLowerCase()}',
+          '$kind',
           jsonEncode(e.json),
           e.timestamp,
           summary: e.json.toString(),
@@ -314,6 +342,83 @@ class LoggingScreen extends Screen {
 
     final int pixelWidth = (frame.elapsedMs * 3).round();
     return '<div class="$classes" style="width: ${pixelWidth}px"/>';
+  }
+
+  List<CoreElement> _createFixedFilters() {
+    final CoreElement gcCheckbox = new CoreElement('input')
+      ..attributes['type'] = 'checkbox';
+    gcCheckbox.click(() {
+      gcCheckbox.toggleAttribute('checked');
+      _showGc = gcCheckbox.hasAttribute('checked');
+    });
+
+    final CoreElement flutterFrameCheckbox = new CoreElement('input')
+      ..attributes['type'] = 'checkbox';
+    flutterFrameCheckbox.toggleAttribute('checked');
+    flutterFrameCheckbox.click(() {
+      flutterFrameCheckbox.toggleAttribute('checked');
+      _showFlutterFrames = flutterFrameCheckbox.hasAttribute('checked');
+    });
+
+    return <CoreElement>[
+      span(c: 'label kind-gc log-header-item')
+        ..add(<CoreElement>[
+          gcCheckbox,
+          span(text: ' gc'),
+        ]),
+      span(c: 'label kind-flutter log-header-item')
+        ..add(<CoreElement>[
+          flutterFrameCheckbox,
+          span(text: ' flutter.frame'),
+        ]),
+    ];
+  }
+
+  void _handleIsolateChanged(IsolateRef isolateRef) async {
+    // clear current log buttons
+    if (_logButtons.isNotEmpty) {
+      for (LoggingButton button in _logButtons) {
+        button.dispose();
+      }
+      _logButtons.clear();
+    }
+
+    if (isolateRef == null) {
+      return;
+    }
+
+    final Isolate isolate = await serviceInfo.service.getIsolate(isolateRef.id);
+
+    // TODO: listen for extension events
+
+    if (isolate.extensionRPCs != null) {
+      // ignore: prefer_foreach
+      for (String rpc in isolate.extensionRPCs) {
+        _checkForExtensionRPC(rpc);
+      }
+    }
+  }
+
+  void _checkForExtensionRPC(final String rpc) {
+    if (rpc == 'ext.flutter.logs.loggingChannels') {
+      serviceInfo.service
+          .callServiceExtension(
+        rpc,
+        isolateId: serviceInfo.isolateManager.selectedIsolate.id,
+      )
+          .then((Response response) {
+        // {x-factor: {enabled: true, description: }, http: {enabled: true, description: }}
+        final Map<dynamic, dynamic> values = response.json['value'];
+
+        for (String channel in values.keys) {
+          _logButtons.add(LoggingButton.create(
+            channel,
+            values[channel]['enabled'] == 'true',
+            _loggingButtonContainer,
+          ));
+        }
+      });
+    }
   }
 }
 
@@ -507,19 +612,13 @@ class LogMessageColumn extends Column<LogData> {
 }
 
 String getCssClassForEventKind(LogData item) {
-  String cssClass = '';
-
-  if (item.kind == 'stderr' || item.isError) {
-    cssClass = 'stderr';
-  } else if (item.kind == 'stdout') {
-    cssClass = 'stdout';
+  if (item.isError) {
+    return 'kind-stderr';
   } else if (item.kind.startsWith('flutter')) {
-    cssClass = 'flutter';
-  } else if (item.kind == 'gc') {
-    cssClass = 'gc';
+    return 'kind-flutter';
+  } else {
+    return 'kind-${item.kind}';
   }
-
-  return cssClass;
 }
 
 class LogDetailsUI extends CoreElement {
@@ -578,5 +677,42 @@ class LogDetailsUI extends CoreElement {
     } else {
       message.text = data.details;
     }
+  }
+}
+
+class LoggingButton {
+  LoggingButton(this.name, this.element);
+
+  final String name;
+  final CoreElement element;
+
+  static LoggingButton create(
+    String channel,
+    bool enabled,
+    CoreElement parent,
+  ) {
+    final CoreElement checkbox = new CoreElement('input')
+      ..attributes['type'] = 'checkbox';
+    checkbox.attribute('checked', enabled);
+    checkbox.click(() {
+      // TODO:
+      //gcCheckbox.toggleAttribute('checked');
+      //_showGc = gcCheckbox.hasAttribute('checked');
+    });
+
+    final CoreElement element = span(c: 'label kind-$channel log-header-item')
+      ..add(<CoreElement>[
+        checkbox,
+        span(text: ' $channel'),
+      ]);
+
+    parent.add(element);
+
+    return new LoggingButton(channel, element);
+  }
+
+  void dispose() {
+    // TODO:
+    element.dispose();
   }
 }
