@@ -36,6 +36,8 @@ const flutterWebLibraryUri = 'package:flutter_web/src/widgets/binding.dart';
 
 class PerfToolFramework extends Framework {
   PerfToolFramework() {
+    print('PerfToolFramework');
+
     html.window.onError.listen(_gAReportExceptions);
     initGlobalUI();
     initTestingModel();
@@ -60,6 +62,8 @@ class PerfToolFramework extends Framework {
   static const _restartActionId = 'restart-action';
 
   void initGlobalUI() async {
+    print('initGlobalUI');
+
     // Listen for clicks on the 'send feedback' button.
     queryId('send-feedback-button').onClick.listen((_) {
       ga.select(ga.devToolsMain, ga.feedback);
@@ -69,7 +73,8 @@ class PerfToolFramework extends Framework {
           .open('https://github.com/flutter/devtools/issues', '_feedback');
     });
 
-    await serviceManager.serviceAvailable.future;
+    //await serviceManager.serviceAvailable.future;
+
     await addScreens();
     screensReady.complete();
 
@@ -77,6 +82,8 @@ class PerfToolFramework extends Framework {
     mainNav.clear();
 
     for (Screen screen in screens) {
+      print(screen);
+
       final CoreElement link = CoreElement('a')
         ..add(<CoreElement>[
           span(c: 'octicon ${screen.iconClass}'),
@@ -140,6 +147,10 @@ class PerfToolFramework extends Framework {
   }
 
   Future<void> addScreens() async {
+    // todo: we need to change these to enable and disable pages dynamically
+    // each page knows what content to display?
+
+    // todo: these could be BehaviorSubject variables
     final _isFlutterApp = await serviceManager.connectedApp.isFlutterApp;
     final _isFlutterWebApp = await serviceManager.connectedApp.isFlutterWebApp;
     final _isProfileBuild = await serviceManager.connectedApp.isProfileBuild;
@@ -162,6 +173,7 @@ class PerfToolFramework extends Framework {
     // possible GA collection.
     ga_platform.setupDimensions();
 
+    addScreen(LandingScreen());
     addScreen(InspectorScreen(
       disabled: !_isAnyFlutterApp || _isProfileBuild,
       disabledTooltip: !_isAnyFlutterApp
@@ -344,6 +356,15 @@ class NotFoundScreen extends Screen {
   @override
   CoreElement createContent(Framework framework) {
     return p(text: 'Page not found: ${html.window.location.pathname}');
+  }
+}
+
+class LandingScreen extends Screen {
+  LandingScreen() : super(name: 'Dart DevTools', id: '/');
+
+  @override
+  CoreElement createContent(Framework framework) {
+    return p(text: 'Hi, this is the landing page.');
   }
 }
 

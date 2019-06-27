@@ -129,12 +129,14 @@ body {
 .masthead a,
 .masthead .masthead-item {
     color: rgba(var(--header-item-rgb), 0.5) !important;
+    cursor: default;
     font-size: 1rem;
     text-decoration: none;
 }
 
 .masthead a.disabled {
     cursor: default;
+    color: var(--default-background);
     opacity: 0.5;
 }
 
@@ -500,11 +502,6 @@ span.function-kind.Tag {
 
 a[disabled] {
     cursor: default;
-}
-
-.masthead a[disabled]:hover {
-    color: var(--default-background);
-    opacity: 0.5;
 }
 
 .progress-element {
