@@ -196,6 +196,43 @@ class DebuggerController extends DisposableController
 
   Future<Stack> getStack() => _service.getStack(isolateRef.id);
 
+  /// TODO: doc
+  void printToConsole(String str, {bool writeOnNewLine = false}) {
+    if (writeOnNewLine && _stdio.value.isNotEmpty) {
+      final lastLine = _stdio.value.last;
+      if (lastLine.isNotEmpty && !lastLine.endsWith('\n')) {
+        str = '\n$str';
+      }
+    }
+
+    appendStdio(str);
+  }
+
+  /// todo: doc
+  Future<Response> evaluateInFrame(String expression) {
+    // todo: currently only supported when paused
+
+    // todo: use the currently selected frame (or the top if none)
+
+    return _service.evaluateInFrame(isolateRef.id, 0, expression);
+  }
+
+  /// todo: doc
+  Future<Response> invoke(
+    String targetId,
+    String selector,
+    List<String> argumentIds, {
+    bool disableBreakpoints,
+  }) {
+    return _service.invoke(
+      isolateRef.id,
+      targetId,
+      selector,
+      argumentIds,
+      disableBreakpoints: disableBreakpoints,
+    );
+  }
+
   void _handleIsolateEvent(Event event) async {
     if (event.isolate.id != isolateRef.id) return;
 

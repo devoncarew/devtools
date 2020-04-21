@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:vm_service/vm_service.dart';
 
 import '../../flutter/common_widgets.dart';
 import '../../flutter/theme.dart';
@@ -31,7 +32,15 @@ class Console extends StatefulWidget {
 }
 
 class _ConsoleState extends State<Console> {
-  final scrollController = ScrollController();
+  ScrollController scrollController;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    scrollController?.dispose();
+    scrollController = ScrollController();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +55,7 @@ class _ConsoleState extends State<Console> {
           debuggerSectionTitle(theme, text: 'Console'),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(denseSpacing),
+              padding: const EdgeInsets.symmetric(horizontal: denseSpacing),
               child: ValueListenableBuilder<List<String>>(
                 valueListenable: widget.controller.stdio,
                 builder: (context, lines, _) {
@@ -79,9 +88,17 @@ class _ConsoleState extends State<Console> {
               ),
             ),
           ),
+          ExpressionArea(controller: widget.controller),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    scrollController?.dispose();
+
+    super.dispose();
   }
 
   void _scrollToBottom() async {
@@ -98,5 +115,119 @@ class _ConsoleState extends State<Console> {
         scrollController.jumpTo(pos.maxScrollExtent);
       }
     }
+  }
+}
+
+class ExpressionArea extends StatefulWidget {
+  const ExpressionArea({
+    Key key,
+    this.controller,
+  }) : super(key: key);
+
+  final DebuggerController controller;
+
+  @override
+  _ExpressionAreaState createState() => _ExpressionAreaState();
+}
+
+class _ExpressionAreaState extends State<ExpressionArea> {
+  TextEditingController editingController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        vertical: densePadding,
+        horizontal: denseSpacing,
+      ),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: theme.focusColor)),
+      ),
+      child: Row(
+        children: [
+          const Text('> '),
+          Expanded(
+            child: SizedBox(
+              height: 20.0,
+              child: TextField(
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                controller: editingController,
+                //onSubmitted: _handleExpression,
+                onEditingComplete: _handleExpression,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleExpression() {
+    String expr = editingController.text;
+
+    expr = expr.trim();
+    if (expr.isEmpty) {
+      return;
+    }
+
+    widget.controller.printToConsole('$expr: ', writeOnNewLine: true);
+
+    // todo: result
+    widget.controller.evaluateInFrame(expr).then((Response response) async {
+      print(response.type);
+      print(response.runtimeType);
+
+      // todo: don't call tostring for null/void responses
+
+      if (response is ErrorRef) {
+        // TODO(devoncarew): Write as stderr.
+        widget.controller.printToConsole('${response.message}\n');
+
+        // TODO(devoncarew): Handle the optional exception, stacktrace.
+
+      } else if (response is InstanceRef) {
+        if (response.valueAsString != null) {
+          widget.controller.printToConsole('${_valueAsString(response)}\n');
+        } else {
+          final result = await widget.controller.invoke(
+            response.id,
+            'toString',
+            <String>[],
+            disableBreakpoints: true,
+          );
+
+          if (result is ErrorRef) {
+            widget.controller.printToConsole('${result.message}\n');
+          } else if (result is InstanceRef) {
+            widget.controller.printToConsole('${_valueAsString(result)}\n');
+          } else {
+            widget.controller.printToConsole('$response\n');
+          }
+        }
+      } else {
+        widget.controller.printToConsole('$response\n');
+      }
+    }).catchError((e) {
+      // TODO(devoncarew): Write as stderr.
+      widget.controller.printToConsole('$e\n');
+    });
+  }
+}
+
+String _valueAsString(InstanceRef ref) {
+  if (ref == null || ref.valueAsString == null) {
+    return null;
+  }
+
+  if (ref.valueAsStringIsTruncated == true) {
+    return '${ref.valueAsString}...';
+  } else {
+    return ref.valueAsString;
   }
 }
