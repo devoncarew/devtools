@@ -18,6 +18,8 @@ import 'debugger_controller.dart';
 
 // TODO(devoncarew): Support hyperlinking to stack traces.
 
+// TODO(devoncarew): Support copy all to clipboard.
+
 /// Display the stdout and stderr output from the process under debug.
 class Console extends StatefulWidget {
   const Console({
@@ -137,6 +139,8 @@ class _ExpressionAreaState extends State<ExpressionArea> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // todo: handle key up, down to navigate previous evaluations
+
     return Container(
       padding: const EdgeInsets.symmetric(
         vertical: densePadding,
@@ -178,31 +182,25 @@ class _ExpressionAreaState extends State<ExpressionArea> {
 
     widget.controller.printToConsole('$expr: ', writeOnNewLine: true);
 
-    // todo: result
     widget.controller.evaluateInFrame(expr).then((Response response) async {
-      print(response.type);
-      print(response.runtimeType);
-
-      // todo: don't call tostring for null/void responses
-
-      if (response is ErrorRef) {
+      if (response == null) {
+        widget.controller.printToConsole('$response\n');
+      } else if (response is ErrorRef) {
         // TODO(devoncarew): Write as stderr.
         widget.controller.printToConsole('${response.message}\n');
 
-        // TODO(devoncarew): Handle the optional exception, stacktrace.
+        // TODO(devoncarew): Handle the optional stacktrace (from Error).
 
       } else if (response is InstanceRef) {
         if (response.valueAsString != null) {
           widget.controller.printToConsole('${_valueAsString(response)}\n');
         } else {
           final result = await widget.controller.invoke(
-            response.id,
-            'toString',
-            <String>[],
-            disableBreakpoints: true,
-          );
+              response.id, 'toString', <String>[],
+              disableBreakpoints: true);
 
           if (result is ErrorRef) {
+            // TODO(devoncarew): Write as stderr.
             widget.controller.printToConsole('${result.message}\n');
           } else if (result is InstanceRef) {
             widget.controller.printToConsole('${_valueAsString(result)}\n');
