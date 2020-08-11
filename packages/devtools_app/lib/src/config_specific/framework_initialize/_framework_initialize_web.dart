@@ -25,19 +25,18 @@ Future<String> initializePlatform() async {
     setGlobal(Storage, BrowserStorage());
   }
 
-  // Prevent the browser default behavior for specific keybindings we'll later
-  // handle in the app. This is a workaround for
+  // Prevent the browser default behavior for specific keybindings that we'll
+  // later handle in the app. This is a workaround for
   // https://github.com/flutter/flutter/issues/58119.
   window.onKeyDown.listen((event) {
-    // Here, we're just trying to match the '⌘P' keybinding on macos.
-    if (!event.metaKey) {
-      return;
-    }
-    if (!window.navigator.userAgent.contains('Macintosh')) {
+    // This handle '⌘P' and '⌘;'.
+
+    // Match the '⌘' keybinding on macos.
+    if (!event.metaKey || !window.navigator.userAgent.contains('Macintosh')) {
       return;
     }
 
-    if (event.key == 'p') {
+    if (event.key == 'p' || event.key == ';') {
       event.preventDefault();
     }
   });

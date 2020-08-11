@@ -168,11 +168,27 @@ class DebuggerScreenBodyState extends State<DebuggerScreenBody>
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
         focusLibraryFilterKeySet:
-            FocusLibraryFilterIntent(_libraryFilterFocusNode, controller),
+            FocusLibraryFilterIntent(controller, _libraryFilterFocusNode),
+        pauseContinueKeySet: DebuggerPauseContinueIntent(controller),
+        if (HostPlatform.instance.isMacOS)
+          pauseContinueKeySetMac: DebuggerPauseContinueIntent(controller),
+        stepOverKeySet: DebuggerStepOverIntent(controller),
+        if (HostPlatform.instance.isMacOS)
+          stepOverKeySetMac: DebuggerStepOverIntent(controller),
+        stepInKeySet: DebuggerStepInIntent(controller),
+        if (HostPlatform.instance.isMacOS)
+          stepInKeySetMac: DebuggerStepInIntent(controller),
+        stepOutKeySet: DebuggerStepOutIntent(controller),
+        if (HostPlatform.instance.isMacOS)
+          stepOutKeySetMac: DebuggerStepOutIntent(controller),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
           FocusLibraryFilterIntent: FocusLibraryFilterAction(),
+          DebuggerPauseContinueIntent: DebuggerPauseContinueAction(),
+          DebuggerStepOverIntent: DebuggerStepOverAction(),
+          DebuggerStepInIntent: DebuggerStepInAction(),
+          DebuggerStepOutIntent: DebuggerStepOutAction(),
         },
         child: Split(
           axis: Axis.horizontal,
@@ -264,6 +280,12 @@ class DebuggerScreenBodyState extends State<DebuggerScreenBody>
   }
 }
 
+abstract class DebuggerIntent extends Intent {
+  const DebuggerIntent(this.controller) : assert(controller != null);
+
+  final DebuggerController controller;
+}
+
 final LogicalKeySet focusLibraryFilterKeySet = LogicalKeySet(
   HostPlatform.instance.isMacOS
       ? LogicalKeyboardKey.meta
@@ -271,21 +293,142 @@ final LogicalKeySet focusLibraryFilterKeySet = LogicalKeySet(
   LogicalKeyboardKey.keyP,
 );
 
-class FocusLibraryFilterIntent extends Intent {
+class FocusLibraryFilterIntent extends DebuggerIntent {
   const FocusLibraryFilterIntent(
+    DebuggerController controller,
     this.focusNode,
-    this.debuggerController,
-  )   : assert(debuggerController != null),
-        assert(focusNode != null);
+  )   : assert(focusNode != null),
+        super(controller);
 
   final FocusNode focusNode;
-  final DebuggerController debuggerController;
 }
 
 class FocusLibraryFilterAction extends Action<FocusLibraryFilterIntent> {
   @override
   void invoke(FocusLibraryFilterIntent intent) {
-    intent.debuggerController.toggleLibrariesVisible();
+    intent.controller.toggleLibrariesVisible();
+  }
+}
+
+final LogicalKeySet pauseContinueKeySet = LogicalKeySet(
+  LogicalKeyboardKey.f8,
+);
+
+final LogicalKeySet pauseContinueKeySetMac = LogicalKeySet(
+  LogicalKeyboardKey.meta,
+  LogicalKeyboardKey.backslash,
+);
+
+class DebuggerPauseContinueIntent extends DebuggerIntent {
+  const DebuggerPauseContinueIntent(DebuggerController controller)
+      : super(controller);
+}
+
+class DebuggerPauseContinueAction extends Action<DebuggerPauseContinueIntent> {
+  @override
+  void invoke(DebuggerPauseContinueIntent intent) {
+    final controller = intent.controller;
+    if (controller.resuming.value) {
+      return;
+    }
+
+    if (controller.isPaused.value) {
+      intent.controller.resume();
+    } else {
+      intent.controller.pause();
+    }
+  }
+}
+
+final LogicalKeySet stepOverKeySet = LogicalKeySet(
+  LogicalKeyboardKey.f10,
+);
+
+final LogicalKeySet stepOverKeySetMac = LogicalKeySet(
+  LogicalKeyboardKey.meta,
+  LogicalKeyboardKey.quote,
+);
+
+class DebuggerStepOverIntent extends DebuggerIntent {
+  const DebuggerStepOverIntent(DebuggerController controller)
+      : super(controller);
+}
+
+class DebuggerStepOverAction extends Action<DebuggerStepOverIntent> {
+  @override
+  void invoke(DebuggerStepOverIntent intent) {
+    final controller = intent.controller;
+    final canStep = controller.isPaused.value &&
+        !controller.resuming.value &&
+        controller.hasFrames.value;
+
+    if (canStep) {
+      intent.controller.stepOver();
+    }
+  }
+}
+
+final LogicalKeySet stepInKeySet = LogicalKeySet(
+  LogicalKeyboardKey.f11,
+);
+
+final LogicalKeySet stepInKeySetMac = LogicalKeySet(
+  LogicalKeyboardKey.meta,
+  LogicalKeyboardKey.semicolon,
+);
+
+class DebuggerStepInIntent extends Intent {
+  const DebuggerStepInIntent(
+    this.debuggerController,
+  ) : assert(debuggerController != null);
+
+  final DebuggerController debuggerController;
+}
+
+class DebuggerStepInAction extends Action<DebuggerStepInIntent> {
+  @override
+  void invoke(DebuggerStepInIntent intent) {
+    final controller = intent.debuggerController;
+    final canStep = controller.isPaused.value &&
+        !controller.resuming.value &&
+        controller.hasFrames.value;
+
+    if (canStep) {
+      intent.debuggerController.stepIn();
+    }
+  }
+}
+
+final LogicalKeySet stepOutKeySet = LogicalKeySet(
+  LogicalKeyboardKey.shift,
+  LogicalKeyboardKey.f11,
+);
+
+final LogicalKeySet stepOutKeySetMac = LogicalKeySet(
+  LogicalKeyboardKey.meta,
+  LogicalKeyboardKey.shift,
+  LogicalKeyboardKey.semicolon,
+);
+
+class DebuggerStepOutIntent extends Intent {
+  const DebuggerStepOutIntent(
+    this.debuggerController,
+  ) : assert(debuggerController != null);
+
+  final DebuggerController debuggerController;
+}
+
+class DebuggerStepOutAction extends Action<DebuggerStepOutIntent> {
+  @override
+  void invoke(DebuggerStepOutIntent intent) {
+    final controller = intent.debuggerController;
+    final canStep = controller.isPaused.value &&
+        !controller.resuming.value &&
+        controller.hasFrames.value;
+
+    if (canStep) {
+      intent.debuggerController.stepOut();
+    }
   }
 }
 
