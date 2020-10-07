@@ -14,13 +14,17 @@ import 'analytics/constants.dart';
 import 'analytics/provider.dart';
 import 'app_size/app_size_controller.dart';
 import 'app_size/app_size_screen.dart';
+import 'auto_dispose_mixin.dart';
 import 'common_widgets.dart';
 import 'config_specific/ide_theme/ide_theme.dart';
+import 'connected_app.dart';
 import 'debugger/debugger_controller.dart';
 import 'debugger/debugger_screen.dart';
+import 'device_dialog.dart';
 import 'dialogs.dart';
 import 'framework/framework_core.dart';
 import 'globals.dart';
+import 'info/info_controller.dart';
 import 'initializer.dart';
 import 'inspector/inspector_screen.dart';
 import 'landing_screen.dart';
@@ -72,7 +76,7 @@ class DevToolsApp extends StatefulWidget {
 
 /// Initializer for the [FrameworkCore] and the app's navigation.
 ///
-/// This manages the route generation, and marshalls URL query parameters into
+/// This manages the route generation, and marshals URL query parameters into
 /// flutter route parameters.
 // TODO(https://github.com/flutter/devtools/issues/1146): Introduce tests that
 // navigate the full app.
@@ -80,6 +84,7 @@ class DevToolsAppState extends State<DevToolsApp> {
   List<Screen> get _screens => widget.screens.map((s) => s.screen).toList();
 
   PreferencesController get preferences => widget.preferences;
+
   IdeTheme get ideTheme => widget.ideTheme;
 
   @override
@@ -172,7 +177,9 @@ class DevToolsAppState extends State<DevToolsApp> {
                     if (serviceManager.connectedApp.isFlutterAppNow) ...[
                       HotReloadButton(),
                       HotRestartButton(),
+                      const BulletSpacer(useAccentColor: true),
                     ],
+                    DeviceInfoAction(),
                     OpenSettingsAction(),
                     OpenAboutAction(),
                   ],
@@ -344,6 +351,63 @@ class OpenAboutAction extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class DeviceInfoAction extends StatefulWidget {
+  @override
+  _DeviceInfoActionState createState() => _DeviceInfoActionState();
+}
+
+class _DeviceInfoActionState extends State<DeviceInfoAction>
+    with AutoDisposeMixin {
+  ConnectedApp app;
+
+  @override
+  void initState() {
+    super.initState();
+
+    app = serviceManager.connectedApp;
+
+    autoDispose(serviceManager.onStateChange.listen((event) {
+      setState(() {
+        app = serviceManager.connectedApp;
+      });
+    }));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ActionButton(
+      tooltip: 'Device Info',
+      child: InkWell(
+        onTap: app == null ? null : _handleTap,
+        child: Container(
+          width: DevToolsScaffold.actionWidgetSize,
+          height: DevToolsScaffold.actionWidgetSize,
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.phone_android,
+            size: actionsIconSize,
+            color: app == null ? theme.disabledColor : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleTap() async {
+    final flutterVersion = await InfoController.getFlutterVersion();
+
+    unawaited(showDialog(
+      context: context,
+      builder: (context) => DeviceDialog(
+        connectedApp: app,
+        flutterVersion: flutterVersion,
+      ),
+    ));
   }
 }
 

@@ -31,6 +31,9 @@ import 'variables.dart';
 // interesting to users.
 const bool debugShowCallStackCount = false;
 
+// TODO: Show a 'paused' control under the debugger tab title when we're
+// paused and not on the debugger page.
+
 class DebuggerScreen extends Screen {
   const DebuggerScreen()
       : super.conditional(
@@ -50,12 +53,6 @@ class DebuggerScreen extends Screen {
 
   @override
   Widget build(BuildContext context) => const DebuggerScreenBody();
-
-  @override
-  Widget buildStatus(BuildContext context, TextTheme textTheme) {
-    final controller = Provider.of<DebuggerController>(context);
-    return DebuggerStatus(controller: controller);
-  }
 }
 
 class DebuggerScreenBody extends StatefulWidget {
@@ -209,7 +206,7 @@ class DebuggerScreenBodyState extends State<DebuggerScreenBody>
       builder: (context, constraints) {
         return FlexSplitColumn(
           totalHeight: constraints.maxHeight,
-          initialFractions: const [0.38, 0.38, 0.24],
+          initialFractions: const [0.40, 0.40, 0.20],
           minSizes: const [0.0, 0.0, 0.0],
           headers: <SizedBox>[
             areaPaneHeader(
@@ -292,78 +289,78 @@ class FocusLibraryFilterAction extends Action<FocusLibraryFilterIntent> {
   }
 }
 
-class DebuggerStatus extends StatefulWidget {
-  const DebuggerStatus({
-    Key key,
-    @required this.controller,
-  }) : super(key: key);
-
-  final DebuggerController controller;
-
-  @override
-  _DebuggerStatusState createState() => _DebuggerStatusState();
-}
-
-class _DebuggerStatusState extends State<DebuggerStatus> with AutoDisposeMixin {
-  String _status;
-
-  @override
-  void initState() {
-    super.initState();
-
-    addAutoDisposeListener(widget.controller.isPaused, _updateStatus);
-
-    _status = '';
-    _updateStatus();
-  }
-
-  @override
-  void didUpdateWidget(DebuggerStatus oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    // todo: should we check that widget.controller != oldWidget.controller?
-    addAutoDisposeListener(widget.controller.isPaused, _updateStatus);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      _status,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    );
-  }
-
-  void _updateStatus() async {
-    final status = await _computeStatus();
-    if (status != _status) {
-      setState(() {
-        _status = status;
-      });
-    }
-  }
-
-  Future<String> _computeStatus() async {
-    final paused = widget.controller.isPaused.value;
-
-    if (!paused) {
-      return 'running';
-    }
-
-    final event = widget.controller.lastEvent;
-    final frame = event.topFrame;
-    final reason =
-        event.kind == EventKind.kPauseException ? ' on exception' : '';
-
-    if (frame == null) {
-      return 'paused$reason';
-    }
-
-    final fileName = ' at ' + frame.location.script.uri.split('/').last;
-    final script = await widget.controller.getScript(frame.location.script);
-    final pos =
-        widget.controller.calculatePosition(script, frame.location.tokenPos);
-
-    return 'paused$reason$fileName $pos';
-  }
-}
+// class DebuggerStatus extends StatefulWidget {
+//   const DebuggerStatus({
+//     Key key,
+//     @required this.controller,
+//   }) : super(key: key);
+//
+//   final DebuggerController controller;
+//
+//   @override
+//   _DebuggerStatusState createState() => _DebuggerStatusState();
+// }
+//
+// class _DebuggerStatusState extends State<DebuggerStatus> with AutoDisposeMixin {
+//   String _status;
+//
+//   @override
+//   void initState() {
+//     super.initState();
+//
+//     addAutoDisposeListener(widget.controller.isPaused, _updateStatus);
+//
+//     _status = '';
+//     _updateStatus();
+//   }
+//
+//   @override
+//   void didUpdateWidget(DebuggerStatus oldWidget) {
+//     super.didUpdateWidget(oldWidget);
+//
+//     // TODO: Should we check that widget.controller != oldWidget.controller?
+//     addAutoDisposeListener(widget.controller.isPaused, _updateStatus);
+//   }
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Text(
+//       _status,
+//       maxLines: 1,
+//       overflow: TextOverflow.ellipsis,
+//     );
+//   }
+//
+//   void _updateStatus() async {
+//     final status = await _computeStatus();
+//     if (status != _status) {
+//       setState(() {
+//         _status = status;
+//       });
+//     }
+//   }
+//
+//   Future<String> _computeStatus() async {
+//     final paused = widget.controller.isPaused.value;
+//
+//     if (!paused) {
+//       return 'running';
+//     }
+//
+//     final event = widget.controller.lastEvent;
+//     final frame = event.topFrame;
+//     final reason =
+//         event.kind == EventKind.kPauseException ? ' on exception' : '';
+//
+//     if (frame == null) {
+//       return 'paused$reason';
+//     }
+//
+//     final fileName = ' at ' + frame.location.script.uri.split('/').last;
+//     final script = await widget.controller.getScript(frame.location.script);
+//     final pos =
+//         widget.controller.calculatePosition(script, frame.location.tokenPos);
+//
+//     return 'paused$reason$fileName $pos';
+//   }
+// }

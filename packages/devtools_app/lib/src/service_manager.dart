@@ -385,9 +385,11 @@ class ServiceConnectionManager {
 
 class IsolateManager {
   List<IsolateRef> _isolates = <IsolateRef>[];
-  IsolateRef _selectedIsolate;
+  final ValueNotifier<IsolateRef> _selectedIsolateNotifier =
+      ValueNotifier<IsolateRef>(null);
   VmServiceWrapper _service;
   ServiceExtensionManager _serviceExtensionManager;
+  final ValueNotifier<Event> _lastPauseEvent = ValueNotifier<Event>(null);
 
   final StreamController<IsolateRef> _isolateCreatedController =
       StreamController<IsolateRef>.broadcast();
@@ -405,14 +407,27 @@ class IsolateManager {
 
   List<IsolateRef> get isolates => List<IsolateRef>.unmodifiable(_isolates);
 
-  IsolateRef get selectedIsolate => _selectedIsolate;
+  IsolateRef get selectedIsolate => _selectedIsolateNotifier.value;
+
+  ValueListenable<IsolateRef> get selectedIsolateListenable =>
+      _selectedIsolateNotifier;
 
   Stream<IsolateRef> get onIsolateCreated => _isolateCreatedController.stream;
 
+  // TODO: Remove this Stream based notifier.
   Stream<IsolateRef> get onSelectedIsolateChanged =>
       _selectedIsolateController.stream;
 
   Stream<IsolateRef> get onIsolateExited => _isolateExitedController.stream;
+
+  /// Return the last received pause event. If a resume event, the kind will be
+  /// `EventKind.kResume`.
+  ValueListenable<Event> get lastPauseEvent => _lastPauseEvent;
+
+  // Called by the DebuggerController class.
+  void setLastPauseEvent(Event event) {
+    _lastPauseEvent.value = event;
+  }
 
   /// Return a unique, monotonically increasing number for this Isolate.
   int isolateIndex(IsolateRef isolateRef) {
@@ -435,13 +450,13 @@ class IsolateManager {
 
     await _initSelectedIsolate(isolates);
 
-    if (_selectedIsolate != null) {
-      _isolateCreatedController.add(_selectedIsolate);
-      _selectedIsolateController.add(_selectedIsolate);
+    if (selectedIsolate != null) {
+      _isolateCreatedController.add(selectedIsolate);
+      _selectedIsolateController.add(selectedIsolate);
       // On initial connection to running app, service extensions are added from
       // here.
       await _serviceExtensionManager
-          ._addRegisteredExtensionRPCs(_selectedIsolate);
+          ._addRegisteredExtensionRPCs(selectedIsolate);
     }
   }
 
@@ -452,7 +467,7 @@ class IsolateManager {
       _isolates.add(event.isolate);
       isolateIndex(event.isolate);
       _isolateCreatedController.add(event.isolate);
-      if (_selectedIsolate == null) {
+      if (selectedIsolate == null) {
         await _setSelectedIsolate(event.isolate);
       }
     } else if (event.kind == EventKind.kServiceExtensionAdded) {
@@ -461,18 +476,19 @@ class IsolateManager {
           ._maybeAddServiceExtension(event.extensionRPC);
 
       // Check to see if there is a new isolate.
-      if (_selectedIsolate == null && _isFlutterExtension(event.extensionRPC)) {
+      if (selectedIsolate == null && _isFlutterExtension(event.extensionRPC)) {
         await _setSelectedIsolate(event.isolate);
       }
     } else if (event.kind == EventKind.kIsolateExit) {
       _isolates.remove(event.isolate);
       _isolateExitedController.add(event.isolate);
-      if (_selectedIsolate == event.isolate) {
-        _selectedIsolate = _isolates.isEmpty ? null : _isolates.first;
-        if (_selectedIsolate == null) {
+      if (selectedIsolate == event.isolate) {
+        _selectedIsolateNotifier.value =
+            _isolates.isEmpty ? null : _isolates.first;
+        if (selectedIsolate == null) {
           selectedIsolateAvailable = Completer();
         }
-        _selectedIsolateController.add(_selectedIsolate);
+        _selectedIsolateController.add(selectedIsolate);
         _serviceExtensionManager.resetAvailableExtensions();
       }
     }
@@ -495,7 +511,7 @@ class IsolateManager {
     }
 
     for (IsolateRef ref in isolates) {
-      if (_selectedIsolate == null) {
+      if (selectedIsolate == null) {
         final Isolate isolate = await _service.getIsolate(ref.id);
         if (isolate.extensionRPCs != null) {
           for (String extensionName in isolate.extensionRPCs) {
@@ -517,7 +533,7 @@ class IsolateManager {
   }
 
   Future<void> _setSelectedIsolate(IsolateRef ref) async {
-    if (_selectedIsolate == ref) {
+    if (selectedIsolate == ref) {
       return;
     }
 
@@ -529,7 +545,7 @@ class IsolateManager {
       selectedIsolateLibraries = isolate.libraries;
     }
 
-    _selectedIsolate = ref;
+    _selectedIsolateNotifier.value = ref;
     if (!selectedIsolateAvailable.isCompleted) {
       selectedIsolateAvailable.complete();
     }
@@ -538,8 +554,8 @@ class IsolateManager {
 
   StreamSubscription<IsolateRef> getSelectedIsolate(
       void onData(IsolateRef ref)) {
-    if (_selectedIsolate != null) {
-      onData(_selectedIsolate);
+    if (selectedIsolate != null) {
+      onData(selectedIsolate);
     }
     return _selectedIsolateController.stream.listen(onData);
   }

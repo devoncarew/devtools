@@ -210,6 +210,8 @@ class DebuggerController extends DisposableController
 
     _clearCaches();
 
+    serviceManager.isolateManager.setLastPauseEvent(null);
+
     if (ref == null) {
       _breakpoints.value = [];
       _breakpointsWithLocation.value = [];
@@ -571,6 +573,8 @@ class DebuggerController extends DisposableController
     _isPaused.value = paused;
 
     _log.log('_pause(running: ${!paused})');
+
+    serviceManager.isolateManager.setLastPauseEvent(pauseEvent);
 
     // Perform an early exit if we're not paused.
     if (!paused) {

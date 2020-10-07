@@ -5,15 +5,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:pedantic/pedantic.dart';
 import 'package:provider/provider.dart';
 import 'package:vm_service/vm_service.dart';
 
 import '../devtools.dart' as devtools;
 import 'common_widgets.dart';
-import 'device_dialog.dart';
 import 'globals.dart';
-import 'info/info_controller.dart';
 import 'screen.dart';
 import 'service_manager.dart';
 import 'theme.dart';
@@ -75,7 +72,7 @@ class StatusLine extends StatelessWidget {
     children.add(Expanded(
       child: Align(
         alignment: Alignment.centerRight,
-        child: buildConnectionStatus(textTheme),
+        child: buildConnectionStatus(context, textTheme),
       ),
     ));
 
@@ -159,75 +156,20 @@ class StatusLine extends StatelessWidget {
     );
   }
 
-  Widget buildConnectionStatus(TextTheme textTheme) {
+  Widget buildConnectionStatus(BuildContext context, TextTheme textTheme) {
     return StreamBuilder(
       initialData: serviceManager.service != null,
       stream: serviceManager.onStateChange,
-      builder: (context, AsyncSnapshot<bool> connectedSnapshot) {
-        if (connectedSnapshot.data) {
-          final app = serviceManager.connectedApp;
-
-          String description;
-          if (!app.isRunningOnDartVM) {
-            description = 'web app';
-          } else {
-            final VM vm = serviceManager.vm;
-            description =
-                '${vm.targetCPU}-${vm.architectureBits} ${vm.operatingSystem}';
-          }
-
+      builder: (context, AsyncSnapshot<bool> connected) {
+        if (connected.data) {
           final color = Theme.of(context).textTheme.bodyText2.color;
 
           return Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              ValueListenableBuilder(
-                valueListenable: serviceManager.deviceBusy,
-                builder: (context, isBusy, _) {
-                  return SizedBox(
-                    width: smallProgressSize,
-                    height: smallProgressSize,
-                    child: isBusy
-                        ? CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(color),
-                          )
-                        : const SizedBox(),
-                  );
-                },
-              ),
+              DeviceBusyStatus(color: color),
               const SizedBox(width: denseSpacing),
-              ActionButton(
-                tooltip: 'Device Info',
-                child: InkWell(
-                  onTap: () async {
-                    final flutterVersion =
-                        await InfoController.getFlutterVersion();
-
-                    unawaited(showDialog(
-                      context: context,
-                      builder: (context) => DeviceDialog(
-                        connectedApp: app,
-                        flutterVersion: flutterVersion,
-                      ),
-                    ));
-                  },
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.info_outline,
-                        size: actionsIconSize,
-                      ),
-                      const SizedBox(width: denseSpacing),
-                      Text(
-                        description,
-                        style: textTheme.bodyText2,
-                        overflow: TextOverflow.clip,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              AppStatusItem(),
             ],
           );
         } else {
@@ -236,6 +178,82 @@ class StatusLine extends StatelessWidget {
             style: textTheme.bodyText2,
           );
         }
+      },
+    );
+  }
+}
+
+class AppStatusItem extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ValueListenableBuilder(
+      valueListenable: serviceManager.isolateManager.lastPauseEvent,
+      builder: (context, Event event, _) {
+        final running = event == null || event.kind == EventKind.kResume;
+        final location = event?.topFrame?.location;
+
+        String description;
+        if (running) {
+          description = 'app running';
+        } else {
+          final exception = event.kind == EventKind.kPauseException;
+          description = exception ? 'app paused on exception' : 'app paused';
+        }
+
+        if (running || location == null) {
+          return Text(
+            description,
+            style: textTheme.bodyText2,
+            overflow: TextOverflow.clip,
+          );
+        } else {
+          final file = location.script.uri.split('/').last;
+
+          return Row(
+            children: [
+              Text('$description at ', style: textTheme.bodyText2),
+              InkWell(
+                onTap: () async {
+                  // todo:
+                  print('goto: debugger ${location.script.uri}'
+                      ':${location.tokenPos}');
+                },
+                child: Text(file, style: linkTextStyle(colorScheme)),
+              ),
+            ],
+          );
+        }
+      },
+    );
+  }
+}
+
+class DeviceBusyStatus extends StatelessWidget {
+  const DeviceBusyStatus({
+    Key key,
+    @required this.color,
+  }) : super(key: key);
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: serviceManager.deviceBusy,
+      builder: (context, isBusy, _) {
+        return SizedBox(
+          width: smallProgressSize,
+          height: smallProgressSize,
+          child: isBusy
+              ? CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                )
+              : const SizedBox(),
+        );
       },
     );
   }
